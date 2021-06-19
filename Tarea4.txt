@@ -1,0 +1,328 @@
+Tarea 4
+
+
+Ejercicio  1
+
+```{r}
+
+library(plyr)
+library(dplyr)
+library(ggplot2)
+library(corrplot)
+
+
+df <- read.csv("house_prices.csv")
+df_final = df
+df
+```
+------------------------------------------------
+1-Imputacion de datos faltantes
+------------------------------------------------
+```{r}
+
+#complete.cases nos permite ver lo campos que tiene informacion completa  y con ! lo contrario
+colsNA <-colnames(df)[!complete.cases(t(df))]
+colsNA
+
+```
+
+```{r}
+incompletData<-df%>%
+  select (colsNA) 
+
+incompletData
+  
+```
+-Ahora se calcual el % de las filas que tiene datos faltantes 
+```{r}
+#con esta funcion miramos cuales son null es decir  nos devuelve true 
+is.na(df$LotFrontage)
+
+#suma de todos los valores null
+  sum(is.na(df$LotFrontage))
+  
+#obtiene el % de los valores null con respecto al total    
+mean(is.na(df$LotFrontage))
+
+```
+
+-Obtenemos el procentaje de todas las columas que tiene valores nulos  
+```{r}
+#apply lo que hacer es hacer el recorrido ya que por columnas o filas y aplicar alguna funcion 
+#MARGIN= 2 sigifica quer recorra las columnas,  
+# el 3 parametro es una fucion que recibe una columna ya que en margin coloco 2 y lo que es como un for que corre sobrer la columa, luego 
+
+
+porcentajeNA<-as.data.frame(apply(incompletData, MARGIN=2, function(col) mean(is.na(col))))
+colnames(porcentajeNA)<-c("Porcentaje")
+porcentajeNA
+
+
+```
+
+
+```{r}
+
+procesables<-porcentajeNA %>%
+  filter(porcentajeNA<0.05)
+procesables
+
+
+```
+-Validamos el tipo de column
+
+```{r}
+
+#rownames es utilizado para indicar el nombre de dolumnas,
+
+df%>% select (rownames(procesables))
+
+
+```
+
+-como es la unica que tengo que es menor  al  5%  y que ademas  es numerica a esa le puedo hacer la imputacion.  
+```{r}
+
+incompletData$MasVnrArea_media<-ifelse(is.na(incompletData$MasVnrArea),
+                               mean(incompletData$MasVnrArea, na.rm=TRUE ),
+                               incompletData$MasVnrArea
+                               ) 
+
+incompletData$MasVnrArea_mediana<-ifelse(is.na(incompletData$MasVnrArea),
+                               median(incompletData$MasVnrArea, na.rm=TRUE ),
+                               incompletData$MasVnrArea
+                               ) 
+
+incompletData
+
+```
+
+-Ahorahacemos una grafica y se considera que el campo que mejor  se adpata es el de  la mediana
+```{r}
+
+incompletData%>%
+  ggplot(aes(x=MasVnrArea, y=..density..))+
+  geom_density(color="blue", lwd=1)+
+  #geom_density(aes(x=MasVnrArea_media, y=..density..), color="red", lwd=1)+
+  geom_density(aes(x=MasVnrArea_mediana, y=..density..), color="purple", lwd=1)+
+  
+theme_minimal()
+  
+
+
+```
+
+-ahora continuamos con el siguente campo  
+```{r}
+
+incompletData$LotFrontage_media <-ifelse(is.na(incompletData$LotFrontage),
+                               mean(incompletData$LotFrontage, na.rm=TRUE ),
+                               incompletData$LotFrontage
+                               ) 
+
+incompletData$LotFrontage_mediana <-ifelse(is.na(incompletData$LotFrontage),
+                               median(incompletData$LotFrontage, na.rm=TRUE ),
+                               incompletData$LotFrontage
+                               ) 
+
+
+incompletData%>%
+  ggplot(aes(x=LotFrontage, y=..density..))+
+  geom_density(color="blue", lwd=1)+
+  geom_density(aes(x=LotFrontage_media, y=..density..), color="red", lwd=0.4)+
+  geom_density(aes(x=LotFrontage_mediana, y=..density..), color="purple", lwd=0.5)+
+  theme_minimal()
+
+```
+
+Ahora veamos como  cambia distribucion con la aplicacion de la imputación
+```{r}
+
+#instalacion de libreria 
+#install.packages("reshape2")
+library(reshape2)
+
+```
+
+-En la siguiente  grafica podemos ver no existe ninguna modificacion en la estructura de los datos.  
+```{r}
+subData <-incompletData %>%
+  select (MasVnrArea, MasVnrArea_media, MasVnrArea_mediana)
+
+dataPbox <- melt(subData)
+dataPbox %>%
+  ggplot(aes(x=variable, y=value))+
+  geom_boxplot()
+
+```
+Para esta grafica podemos ver que si existe una modificacion en la distribucion de los valores.  
+```{r}
+
+subData <-incompletData %>%
+  select (LotFrontage, LotFrontage_mediana, LotFrontage_media)
+
+dataPbox2 <- melt(subData)
+
+
+dataPbox2 %>%
+  ggplot(aes(x=variable, y=value))+
+  geom_boxplot()
+
+
+```
+Se procede a actualizar los campos
+```{r}
+
+class(df_final)
+
+df_final$MasVnrArea=incompletData$MasVnrArea_mediana
+df_final<-df_final[!(names(df_final)=="LotFrontage")]
+df_final<-df_final[!(names(df_final)=="FireplaceQu")]
+
+df_final
+
+
+```
+
+
+Debido a que al aplicar la media  o medina  en los campos faltantes la distribuicion se distorciona  hacia  arriba  no se considera utilizar dicha  imputacion de campos, considerando que  el %  mayo al  5% por lo que una alternativa seria no tomar  en cuenta esa columna o bien aplicar otra tecnica.  
+
+--------------------------------------------
+2---Codificacion de variables Catergoricas
+--------------------------------------------
+
+```{r}
+#aqui se instala la libria CARET - esta libreria es utilizada para machine learning  en R
+#install.packages("caret")
+```
+
+```{r}
+librery(caret)
+table(df$LotShape)
+table(df$FireplaceQu)  #--- Variable a eliminar ya que tiene mas del  47% valores nulos
+table(df$Heating)
+table(df$ExterQual)
+table(df$CentralAir)
+
+
+#el resultado del table es igual al de group_by
+table(df$LotShape)
+Freq <- df %>%
+  group_by(LotShape) %>%
+  summarise(FreaVal= n())
+Freq
+```
+
+-acontinuacion podemos ver que  nuestro dataframe pasa de  15   a 31  variables ya que por cada columna me crea otras con el valor de cada catalogo de la columna principal generando asi  que nuestro data set se duplique y que a su vez el algoritmo tendra que usar mas recursos para procesarlo, podriamos considerarlo si no fueran muchas categorias (10) pero debido a que se sobrepasan no se toma encuenta
+
+
+```{r}
+library(caret)
+
+OHE <- dummyVars("~ .", data=df)
+OHE_dataframe <- data.frame(predict(OHE, newdata=df))
+
+OHE_dataframe
+df
+
+
+
+```
+
+
+
+```{r}
+dim(OHE_dataframe)
+dim(df)
+
+```
+
+-Como se puedo ver no era correcto  crear una columa  por cada cateroria de cada columna se procede a realzizar la implementacion de los valores por  frecuencia 
+-Ahora probamos  cambiando los valores por la frecuencia y lo hacemos para todas la variables 
+```{r}
+
+FreqAnalysis_LotShape <- df %>%
+  group_by(LotShape) %>%
+  summarise(FreaValA= n(), densityA=n()/nrow(df)) %>%
+  arrange(-FreaValA)
+
+FreqAnalysis_Heating <- df %>%
+  group_by(Heating) %>%
+  summarise(FreaValB= n(), densitB=n()/nrow(df)) %>%
+  arrange(-FreaValB)
+
+FreqAnalysis_ExterQual <- df %>%
+  group_by(ExterQual) %>%
+  summarise(FreaValC= n(), densitC=n()/nrow(df)) %>%
+  arrange(-FreaValC)
+
+FreqAnalysis_CentralAir <- df %>%
+  group_by(CentralAir) %>%
+  summarise(FreaValD= n(), densityD=n()/nrow(df)) %>%
+  arrange(-FreaValD)
+
+FreqAnalysis_LotShape
+FreqAnalysis_Heating
+FreqAnalysis_ExterQual
+FreqAnalysis_CentralAir
+
+
+```
+
+```{r}
+
+df<-merge(df, FreqAnalysis_LotShape, by.x="LotShape", by.y="LotShape")
+df<-merge(df, FreqAnalysis_Heating, by.x="Heating", by.y="Heating")
+df<-merge(df, FreqAnalysis_ExterQual, by.x="ExterQual", by.y="ExterQual")
+df<-merge(df, FreqAnalysis_CentralAir, by.x="CentralAir", by.y="CentralAir")
+
+df
+
+```
+
+Ahora procedemos a remplazar los valores 
+```{r}
+
+df_final$LotShape<-df$FreaValA
+df_final$Heating<-df$FreaValB
+df_final$ExterQual<-df$FreaValC
+df_final$CentralAir<-df$FreaValD
+
+df_final
+
+```
+
+--------------------------------------------
+3---Manejo de Outliers,
+--------------------------------------------
+```{r}
+#se realiza la instalacion de la libreria
+#install.packages("gridExtra")
+
+library(gridExtra)
+
+```
+
+```{r}
+
+df_final[13]
+plot(df_final[13], df_final[1], pch=20)
+
+
+```
+
+--------------------------------------------
+4---Transformación de variables,
+--------------------------------------------
+```{r}
+
+```
+
+--------------------------------------------
+5--Feature scaling.
+--------------------------------------------
+```{r}
+summary(df_final)
+
+```
+
